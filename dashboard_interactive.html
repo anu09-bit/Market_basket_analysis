@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Market Basket Analysis — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --surface2: #f9f8f6;
+    --border: rgba(0,0,0,0.08);
+    --text: #1a1a19;
+    --muted: #6b6a66;
+    --accent: #2a78d6;
+    --teal: #1baf7a;
+    --amber: #eda100;
+    --coral: #D85A30;
+    --purple: #7F77DD;
+    --radius: 12px;
+  }
+
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── Header ── */
+  .header { background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; display: flex; align-items: center; justify-content: space-between;
+    height: 60px; position: sticky; top: 0; z-index: 100; }
+  .header-title { font-size: 16px; font-weight: 600; color: var(--text); }
+  .header-title span { color: var(--accent); }
+  .header-meta { font-size: 13px; color: var(--muted); }
+
+  /* ── Nav tabs ── */
+  .nav { background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 2rem; display: flex; gap: 0; position: sticky; top: 60px; z-index: 99; }
+  .nav-tab { padding: 14px 20px; font-size: 13px; font-weight: 500; cursor: pointer;
+    color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s;
+    white-space: nowrap; background: none; border-top: none; border-left: none; border-right: none; }
+  .nav-tab:hover { color: var(--text); }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── Layout ── */
+  .page { display: none; padding: 1.5rem 2rem 3rem; max-width: 1400px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* ── KPI row ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 1.5rem; }
+  .kpi { background: var(--surface); border-radius: var(--radius); padding: 1rem 1.25rem;
+    border: 1px solid var(--border); }
+  .kpi-label { font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 6px; }
+  .kpi-value { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
+  .kpi-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .kpi.accent .kpi-value { color: var(--accent); }
+  .kpi.teal .kpi-value   { color: var(--teal); }
+  .kpi.amber .kpi-value  { color: var(--amber); }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .span-2 { grid-column: span 2; }
+  .span-3 { grid-column: span 3; }
+
+  /* ── Card ── */
+  .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border);
+    padding: 1.25rem; }
+  .card-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 1rem; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: -8px; margin-bottom: 1rem; }
+
+  /* ── Chart wrappers ── */
+  .chart-wrap { position: relative; }
+  .h200 { height: 200px; }
+  .h260 { height: 260px; }
+  .h300 { height: 300px; }
+  .h360 { height: 360px; }
+  .h420 { height: 420px; }
+
+  /* ── Rules table ── */
+  .rules-controls { display: flex; gap: 10px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .rules-controls label { font-size: 12px; color: var(--muted); }
+  .rules-controls select, .rules-controls input[type=range] { font-size: 12px; padding: 5px 8px;
+    border: 1px solid var(--border); border-radius: 6px; background: var(--surface2); color: var(--text); }
+  .range-val { font-size: 12px; font-weight: 600; color: var(--accent); min-width: 28px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { padding: 9px 12px; text-align: left; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+    border-bottom: 1px solid var(--border); white-space: nowrap; cursor: pointer; }
+  thead th:hover { color: var(--accent); }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  tbody td { padding: 9px 12px; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-blue   { background: #dbeafe; color: #1e40af; }
+  .badge-green  { background: #d1fae5; color: #065f46; }
+  .badge-amber  { background: #fef3c7; color: #92400e; }
+  .badge-red    { background: #fee2e2; color: #991b1b; }
+  .lift-bar { display: flex; align-items: center; gap: 6px; }
+  .lift-track { flex: 1; height: 5px; background: #e5e7eb; border-radius: 3px; overflow: hidden; min-width: 60px; }
+  .lift-fill  { height: 100%; border-radius: 3px; }
+
+  /* ── Heatmap ── */
+  .heat-wrap { overflow-x: auto; }
+  .heat-table { border-collapse: collapse; font-size: 11px; }
+  .heat-table th { padding: 5px 7px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .heat-table th.row-label { text-align: right; font-size: 11px; }
+  .heat-table td { padding: 6px 7px; text-align: center; border-radius: 4px;
+    font-weight: 600; font-size: 11px; min-width: 44px; }
+
+  /* ── Recommendations ── */
+  .reco-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .reco-card { background: var(--surface2); border-radius: 8px; padding: 1rem; border: 1px solid var(--border); }
+  .reco-card h4 { font-size: 12px; font-weight: 600; margin-bottom: .75rem; color: var(--muted); }
+  .reco-item { display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .reco-item:last-child { border-bottom: none; }
+  .reco-score { font-weight: 700; color: var(--accent); font-size: 12px; }
+  .reco-bar { flex: 1; height: 4px; background: #e5e7eb; border-radius: 2px; margin: 0 8px; overflow: hidden; }
+  .reco-bar-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+
+  /* ── Segments ── */
+  .seg-list { display: flex; flex-direction: column; gap: 10px; }
+  .seg-row { display: flex; align-items: center; gap: 12px; padding: 12px;
+    background: var(--surface2); border-radius: 8px; border: 1px solid var(--border); }
+  .seg-icon { width: 38px; height: 38px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .seg-info { flex: 1; }
+  .seg-name { font-size: 13px; font-weight: 600; }
+  .seg-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .seg-right { text-align: right; flex-shrink: 0; }
+  .seg-pct  { font-size: 18px; font-weight: 700; color: var(--accent); }
+  .seg-lbl  { font-size: 10px; color: var(--muted); }
+
+  /* ── Tooltip override ── */
+  .sort-arrow { margin-left: 4px; opacity: .4; }
+  .sort-arrow.active { opacity: 1; color: var(--accent); }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .kpi-row { grid-template-columns: repeat(3,1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .span-2, .span-3 { grid-column: span 1; }
+    .reco-grid { grid-template-columns: 1fr; }
+    .page { padding: 1rem; }
+  }
+  @media (max-width: 540px) {
+    .kpi-row { grid-template-columns: repeat(2,1fr); }
+    .nav { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">Market Basket <span>Analysis</span></div>
+  <div class="header-meta">150 transactions · 45 products · 8 categories · Values in ₹</div>
+</div>
+
+<nav class="nav">
+  <button class="nav-tab active" onclick="showPage('overview',this)">Overview</button>
+  <button class="nav-tab" onclick="showPage('rules',this)">Association Rules</button>
+  <button class="nav-tab" onclick="showPage('heatmap',this)">Co-occurrence</button>
+  <button class="nav-tab" onclick="showPage('products',this)">Products</button>
+  <button class="nav-tab" onclick="showPage('recos',this)">Recommendations</button>
+  <button class="nav-tab" onclick="showPage('segments',this)">Segments</button>
+</nav>
+
+<!-- ══════════════ OVERVIEW ══════════════ -->
+<div id="page-overview" class="page active">
+  <div class="kpi-row">
+    <div class="kpi accent"><div class="kpi-label">Transactions</div><div class="kpi-value">150</div><div class="kpi-sub">Jan–Dec 2024</div></div>
+    <div class="kpi teal"><div class="kpi-label">Total Revenue</div><div class="kpi-value">₹5.35L</div><div class="kpi-sub">All categories</div></div>
+    <div class="kpi"><div class="kpi-label">Unique Products</div><div class="kpi-value">45</div><div class="kpi-sub">8 categories</div></div>
+    <div class="kpi amber"><div class="kpi-label">Association Rules</div><div class="kpi-value">29</div><div class="kpi-sub">Confidence ≥ 40%</div></div>
+    <div class="kpi"><div class="kpi-label">Avg Basket Size</div><div class="kpi-value">4.35</div><div class="kpi-sub">items per order</div></div>
+    <div class="kpi"><div class="kpi-label">Max Lift</div><div class="kpi-value">7.99×</div><div class="kpi-sub">Chicken ↔ Garlic</div></div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Revenue by category</div>
+      <div class="chart-wrap h260"><canvas id="catRevChart" role="img" aria-label="Bar chart of revenue by product category">Revenue by category data.</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Transaction volume by hour</div>
+      <div class="chart-wrap h260"><canvas id="hourlyChart" role="img" aria-label="Line chart of transactions per hour">Hourly transaction volume.</canvas></div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Basket size distribution</div>
+      <div class="chart-wrap h260"><canvas id="basketChart" role="img" aria-label="Histogram of basket sizes">Basket size distribution.</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top 10 rules by lift — quick view</div>
+      <div class="chart-wrap h260"><canvas id="liftOverviewChart" role="img" aria-label="Horizontal bar chart of top rules by lift">Top rules by lift.</canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ RULES ══════════════ -->
+<div id="page-rules" class="page">
+  <div class="card">
+    <div class="card-title">All association rules</div>
+    <div class="card-sub">Click column headers to sort · Filter by minimum lift or confidence</div>
+    <div class="rules-controls">
+      <label>Min lift</label>
+      <input type="range" id="liftFilter" min="1" max="8" step="0.5" value="1" oninput="filterRules()">
+      <span class="range-val" id="liftVal">1.0×</span>
+      <label style="margin-left:12px">Min confidence</label>
+      <input type="range" id="confFilter" min="0.4" max="1" step="0.05" value="0.4" oninput="filterRules()">
+      <span class="range-val" id="confVal">40%</span>
+      <label style="margin-left:12px">Sort by</label>
+      <select id="sortBy" onchange="filterRules()">
+        <option value="lift">Lift</option>
+        <option value="confidence">Confidence</option>
+        <option value="support">Support</option>
+        <option value="leverage">Leverage</option>
+      </select>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th onclick="setSort('antecedent')">If buys <span class="sort-arrow" id="arr-antecedent">▼</span></th>
+            <th onclick="setSort('consequent')">Also buys <span class="sort-arrow" id="arr-consequent">▼</span></th>
+            <th onclick="setSort('support')">Support <span class="sort-arrow" id="arr-support">▼</span></th>
+            <th onclick="setSort('confidence')">Confidence <span class="sort-arrow" id="arr-confidence">▼</span></th>
+            <th onclick="setSort('lift')">Lift <span class="sort-arrow active" id="arr-lift">▼</span></th>
+            <th onclick="setSort('leverage')">Leverage <span class="sort-arrow" id="arr-leverage">▼</span></th>
+          </tr>
+        </thead>
+        <tbody id="rules-tbody"></tbody>
+      </table>
+      <div id="rules-count" style="font-size:12px;color:var(--muted);margin-top:.75rem;text-align:right"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Confidence vs lift — top 20 rules</div>
+    <div class="chart-wrap h360"><canvas id="confLiftChart" role="img" aria-label="Grouped bar chart of confidence and lift for top 20 rules">Confidence vs lift.</canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════ HEATMAP ══════════════ -->
+<div id="page-heatmap" class="page">
+  <div class="card">
+    <div class="card-title">Product co-occurrence matrix</div>
+    <div class="card-sub">Percentage of transactions where both products appear together. Darker = more frequent.</div>
+    <div class="heat-wrap" id="heat-container"></div>
+  </div>
+
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Support vs confidence scatter (bubble = lift)</div>
+    <div class="chart-wrap h360"><canvas id="scatterChart" role="img" aria-label="Scatter plot of support vs confidence with bubble size representing lift">Support vs confidence scatter.</canvas></div>
+  </div>
+</div>
+
+<!-- ══════════════ PRODUCTS ══════════════ -->
+<div id="page-products" class="page">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Product support (% of transactions)</div>
+      <div class="chart-wrap h420"><canvas id="supportChart" role="img" aria-label="Horizontal bar chart of product support percentages">Product support.</canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Product revenue (₹)</div>
+      <div class="chart-wrap h420"><canvas id="revenueChart" role="img" aria-label="Horizontal bar chart of product revenue">Product revenue.</canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Product stats table</div>
+    <table>
+      <thead><tr>
+        <th>Product</th><th>Transactions</th><th>Support %</th><th>Revenue (₹)</th>
+      </tr></thead>
+      <tbody id="stats-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ══════════════ RECOMMENDATIONS ══════════════ -->
+<div id="page-recos" class="page">
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-title">Product recommendation engine</div>
+    <div class="card-sub">Select a product to see what customers also buy, ranked by confidence score.</div>
+    <select id="recoSelect" onchange="showRecos()" style="font-size:14px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);margin-bottom:1.25rem">
+    </select>
+    <div class="reco-grid" id="reco-output"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">All rules for selected product</div>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Antecedent</th><th>Consequent</th><th>Support</th><th>Confidence</th><th>Lift</th></tr></thead>
+      <tbody id="reco-rules-tbody"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<!-- ══════════════ SEGMENTS ══════════════ -->
+<div id="page-segments" class="page">
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Customer basket segments</div>
+      <div class="seg-list" id="seg-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Segment distribution</div>
+      <div class="chart-wrap h300"><canvas id="segPieChart" role="img" aria-label="Doughnut chart of customer segment distribution">Segment distribution.</canvas></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Placement opportunities</div>
+    <table>
+      <thead><tr><th>From product</th><th>→ Place near</th><th>Lift</th><th>Rationale</th></tr></thead>
+      <tbody id="placement-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// ── Data ────────────────────────────────────────────────────────────────────
+const RULES = [{"antecedent":"Garlic","consequent":"Chicken","support":0.06,"confidence":0.6923,"lift":7.9882,"leverage":0.0525,"conviction":2.9683},{"antecedent":"Chicken","consequent":"Garlic","support":0.06,"confidence":0.6923,"lift":7.9882,"leverage":0.0525,"conviction":2.9683},{"antecedent":"Cheese","consequent":"Wine","support":0.1,"confidence":0.8824,"lift":7.7855,"leverage":0.0872,"conviction":7.5367},{"antecedent":"Wine","consequent":"Cheese","support":0.1,"confidence":0.8824,"lift":7.7855,"leverage":0.0872,"conviction":7.5367},{"antecedent":"Honey","consequent":"Tea","support":0.06,"confidence":0.6429,"lift":7.4176,"leverage":0.0519,"conviction":2.5573},{"antecedent":"Tea","consequent":"Honey","support":0.06,"confidence":0.6923,"lift":7.4176,"leverage":0.0519,"conviction":2.9467},{"antecedent":"Sausage","consequent":"Mustard","support":0.0667,"confidence":0.5263,"lift":5.2632,"leverage":0.054,"conviction":1.9},{"antecedent":"Mustard","consequent":"Sausage","support":0.0667,"confidence":0.6667,"lift":5.2632,"leverage":0.054,"conviction":2.62},{"antecedent":"Yogurt","consequent":"Granola","support":0.0667,"confidence":0.5882,"lift":4.902,"leverage":0.0531,"conviction":2.1371},{"antecedent":"Granola","consequent":"Yogurt","support":0.0667,"confidence":0.5556,"lift":4.902,"leverage":0.0531,"conviction":1.995},{"antecedent":"Tomato","consequent":"Olive Oil","support":0.0733,"confidence":0.7857,"lift":4.7143,"leverage":0.0578,"conviction":3.8889},{"antecedent":"Olive Oil","consequent":"Tomato","support":0.0733,"confidence":0.44,"lift":4.7143,"leverage":0.0578,"conviction":1.619},{"antecedent":"Milk","consequent":"Cereal","support":0.0867,"confidence":0.4643,"lift":4.3527,"leverage":0.0668,"conviction":1.6676},{"antecedent":"Cereal","consequent":"Milk","support":0.0867,"confidence":0.8125,"lift":4.3527,"leverage":0.0668,"conviction":4.3378},{"antecedent":"Ground Beef","consequent":"Tomato Sauce","support":0.0533,"confidence":0.4706,"lift":4.1522,"leverage":0.0405,"conviction":1.6748},{"antecedent":"Tomato Sauce","consequent":"Ground Beef","support":0.0533,"confidence":0.4706,"lift":4.1522,"leverage":0.0405,"conviction":1.6748},{"antecedent":"Beer","consequent":"Pretzels","support":0.0867,"confidence":0.4815,"lift":3.6111,"leverage":0.0627,"conviction":1.6714},{"antecedent":"Pretzels","consequent":"Beer","support":0.0867,"confidence":0.65,"lift":3.6111,"leverage":0.0627,"conviction":2.3429},{"antecedent":"Chips","consequent":"Beer","support":0.1,"confidence":0.6,"lift":3.3333,"leverage":0.07,"conviction":2.05},{"antecedent":"Beer","consequent":"Chips","support":0.1,"confidence":0.5556,"lift":3.3333,"leverage":0.07,"conviction":1.875},{"antecedent":"Salsa","consequent":"Chips","support":0.0867,"confidence":0.52,"lift":3.12,"leverage":0.0589,"conviction":1.7361},{"antecedent":"Chips","consequent":"Salsa","support":0.0867,"confidence":0.52,"lift":3.12,"leverage":0.0589,"conviction":1.7361},{"antecedent":"Bacon","consequent":"Eggs","support":0.0867,"confidence":0.619,"lift":3.0952,"leverage":0.0587,"conviction":2.1},{"antecedent":"Eggs","consequent":"Bacon","support":0.0867,"confidence":0.4333,"lift":3.0952,"leverage":0.0587,"conviction":1.5176},{"antecedent":"Pasta","consequent":"Olive Oil","support":0.06,"confidence":0.4737,"lift":2.8421,"leverage":0.0389,"conviction":1.5833},{"antecedent":"Butter","consequent":"Bread","support":0.0667,"confidence":0.4348,"lift":2.8355,"leverage":0.0432,"conviction":1.4979},{"antecedent":"Bread","consequent":"Butter","support":0.0667,"confidence":0.4348,"lift":2.8355,"leverage":0.0432,"conviction":1.4979},{"antecedent":"Bread","consequent":"Eggs","support":0.08,"confidence":0.5217,"lift":2.6087,"leverage":0.0493,"conviction":1.6727},{"antecedent":"Coffee","consequent":"Milk","support":0.0733,"confidence":0.4583,"lift":2.4554,"leverage":0.0435,"conviction":1.5015}];
+
+const STATS = [{"product":"Eggs","txn_count":30,"support":0.2,"revenue":20301.96},{"product":"Milk","txn_count":28,"support":0.1867,"revenue":26032.44},{"product":"Beer","txn_count":27,"support":0.18,"revenue":18755.52},{"product":"Chips","txn_count":25,"support":0.1667,"revenue":19976.04},{"product":"Olive Oil","txn_count":25,"support":0.1667,"revenue":15808.80},{"product":"Salsa","txn_count":25,"support":0.1667,"revenue":24339.84},{"product":"Coffee","txn_count":24,"support":0.16,"revenue":18914.28},{"product":"Bread","txn_count":23,"support":0.1533,"revenue":16025.52},{"product":"Butter","txn_count":23,"support":0.1533,"revenue":16728.60},{"product":"Bacon","txn_count":21,"support":0.14,"revenue":18284.28},{"product":"Pretzels","txn_count":20,"support":0.1333,"revenue":20284.32},{"product":"Sausage","txn_count":19,"support":0.1267,"revenue":18677.40},{"product":"Pasta","txn_count":19,"support":0.1267,"revenue":13504.68},{"product":"Granola","txn_count":18,"support":0.12,"revenue":20724.48},{"product":"Ground Beef","txn_count":17,"support":0.1133,"revenue":14298.48},{"product":"Tomato Sauce","txn_count":17,"support":0.1133,"revenue":14074.20},{"product":"Wine","txn_count":17,"support":0.1133,"revenue":13387.08},{"product":"Lemon","txn_count":17,"support":0.1133,"revenue":11908.68},{"product":"Yogurt","txn_count":17,"support":0.1133,"revenue":15585.36},{"product":"Cheese","txn_count":17,"support":0.1133,"revenue":10476.48}];
+
+const COOC_LABELS = ["Eggs","Milk","Beer","Olive Oil","Chips","Salsa","Coffee","Bread","Butter","Bacon","Pretzels","Sausage"];
+const COOC_MATRIX = [[20.0,3.3,0.7,2.7,0.7,2.0,2.7,8.0,2.7,8.7,0.7,2.7],[3.3,18.7,3.3,1.3,2.7,2.7,7.3,0.7,0.7,3.3,2.7,2.7],[0.7,3.3,18.0,0.7,10.0,4.0,2.0,2.7,2.7,2.7,8.7,0.7],[2.7,1.3,0.7,16.7,0.0,2.7,3.3,2.7,4.0,1.3,0.7,2.7],[0.7,2.7,10.0,0.0,16.7,8.7,2.7,2.7,2.7,0.0,3.3,1.3],[2.0,2.7,4.0,2.7,8.7,16.7,2.0,3.3,3.3,1.3,2.7,1.3],[2.7,7.3,2.0,3.3,2.7,2.0,16.0,1.3,3.3,1.3,2.0,2.0],[8.0,0.7,2.7,2.7,2.7,3.3,1.3,15.3,6.7,2.7,1.3,1.3],[2.7,0.7,2.7,4.0,2.7,3.3,3.3,6.7,15.3,2.7,0.7,0.7],[8.7,3.3,2.7,1.3,0.0,1.3,1.3,2.7,2.7,14.0,2.7,1.3],[0.7,2.7,8.7,0.7,3.3,2.7,2.0,1.3,0.7,2.7,13.3,0.0],[2.7,2.7,0.7,2.7,1.3,1.3,2.0,1.3,0.7,1.3,0.0,12.7]];
+
+const CAT_REV = {"Snacks":90331,"Dairy":79393,"Beverages":75165,"Meat":68944,"Pantry":67126,"Bakery":59458,"Produce":57089,"Condiments":37686};
+const HOURLY  = {"8":3,"9":4,"10":20,"11":9,"12":12,"13":16,"14":12,"15":21,"16":9,"17":13,"18":14,"19":5,"20":5,"21":7};
+const BASKET  = {"2":31,"3":22,"4":25,"5":36,"6":18,"7":9,"8":8,"9":1};
+
+const COLORS = ["#2a78d6","#1baf7a","#eda100","#D85A30","#7F77DD","#888780","#e24b4a","#1d9e75"];
+
+// ── Navigation ───────────────────────────────────────────────────────────────
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  btn.classList.add('active');
+}
+
+// ── Chart helpers ────────────────────────────────────────────────────────────
+const chartDefaults = {
+  responsive: true, maintainAspectRatio: false,
+  plugins: { legend: { display: false } },
+};
+
+// ── Overview charts ──────────────────────────────────────────────────────────
+new Chart(document.getElementById('catRevChart'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(CAT_REV),
+    datasets: [{ label: 'Revenue (₹)', data: Object.values(CAT_REV),
+      backgroundColor: COLORS, borderRadius: 5, borderSkipped: false }]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { grid: { color: '#f0eeea' }, ticks: { callback: v => '₹' + v.toLocaleString('en-IN') } },
+    x: { grid: { display: false } }
+  }, plugins: { legend: { display: false }, tooltip: { callbacks: {
+    label: ctx => '₹' + ctx.parsed.y.toLocaleString('en-IN')
+  }}}}
+});
+
+new Chart(document.getElementById('hourlyChart'), {
+  type: 'line',
+  data: {
+    labels: Object.keys(HOURLY).map(h => h + ':00'),
+    datasets: [{ label: 'Transactions', data: Object.values(HOURLY),
+      borderColor: '#7F77DD', backgroundColor: 'rgba(127,119,221,0.12)',
+      fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#7F77DD',
+      borderWidth: 2 }]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { grid: { color: '#f0eeea' }, beginAtZero: true },
+    x: { grid: { display: false } }
+  }, plugins: { legend: { display: false }}}
+});
+
+new Chart(document.getElementById('basketChart'), {
+  type: 'bar',
+  data: {
+    labels: Object.keys(BASKET).map(k => k + ' items'),
+    datasets: [{ label: 'Transactions', data: Object.values(BASKET),
+      backgroundColor: '#eda100', borderRadius: 4, borderSkipped: false }]
+  },
+  options: { ...chartDefaults, scales: {
+    y: { grid: { color: '#f0eeea' }, beginAtZero: true },
+    x: { grid: { display: false } }
+  }, plugins: { legend: { display: false },
+    annotation: { annotations: { meanLine: { type: 'line', xMin: 2.35, xMax: 2.35, borderColor: '#D85A30', borderWidth: 2, borderDash: [4,4] }}}
+  }}
+});
+
+const top10Rules = RULES.slice(0, 10);
+new Chart(document.getElementById('liftOverviewChart'), {
+  type: 'bar',
+  data: {
+    labels: top10Rules.map(r => r.antecedent + ' → ' + r.consequent),
+    datasets: [{ label: 'Lift', data: top10Rules.map(r => r.lift),
+      backgroundColor: top10Rules.map(r => r.lift >= 6 ? '#eda100' : r.lift >= 4 ? '#2a78d6' : '#1baf7a'),
+      borderRadius: 4 }]
+  },
+  options: { ...chartDefaults, indexAxis: 'y',
+    scales: {
+      x: { grid: { color: '#f0eeea' }, min: 0 },
+      y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+    },
+    plugins: { legend: { display: false }, tooltip: { callbacks: {
+      label: ctx => 'Lift: ' + ctx.parsed.x.toFixed(2) + '×'
+    }}}
+  }
+});
+
+// ── Rules table ──────────────────────────────────────────────────────────────
+let currentSort = 'lift';
+let sortDir = -1;
+
+function liftBadgeClass(l) {
+  if (l >= 6) return 'badge-amber';
+  if (l >= 4) return 'badge-blue';
+  if (l >= 2) return 'badge-green';
+  return '';
+}
+function liftColor(l) {
+  if (l >= 6) return '#eda100';
+  if (l >= 4) return '#2a78d6';
+  if (l >= 2) return '#1baf7a';
+  return '#888';
+}
+
+function filterRules() {
+  const minLift = parseFloat(document.getElementById('liftFilter').value);
+  const minConf = parseFloat(document.getElementById('confFilter').value);
+  const sortBy  = document.getElementById('sortBy').value;
+  document.getElementById('liftVal').textContent = minLift.toFixed(1) + '×';
+  document.getElementById('confVal').textContent  = Math.round(minConf * 100) + '%';
+
+  let data = RULES.filter(r => r.lift >= minLift && r.confidence >= minConf);
+  data.sort((a, b) => (b[sortBy] - a[sortBy]) * -sortDir);
+  const maxLift = Math.max(...data.map(r => r.lift), 1);
+
+  const tbody = document.getElementById('rules-tbody');
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td><span class="badge badge-blue">${r.antecedent}</span></td>
+      <td><span class="badge badge-green">${r.consequent}</span></td>
+      <td>${(r.support * 100).toFixed(1)}%</td>
+      <td>${(r.confidence * 100).toFixed(1)}%</td>
+      <td>
+        <div class="lift-bar">
+          <div class="lift-track"><div class="lift-fill" style="width:${(r.lift/maxLift*100).toFixed(0)}%;background:${liftColor(r.lift)}"></div></div>
+          <span class="badge ${liftBadgeClass(r.lift)}">${r.lift.toFixed(2)}×</span>
+        </div>
+      </td>
+      <td>${r.leverage.toFixed(4)}</td>
+    </tr>`).join('');
+  document.getElementById('rules-count').textContent = data.length + ' rule' + (data.length !== 1 ? 's' : '') + ' shown';
+}
+
+function setSort(col) {
+  if (currentSort === col) sortDir *= -1;
+  else { currentSort = col; sortDir = -1; }
+  document.querySelectorAll('.sort-arrow').forEach(a => a.classList.remove('active'));
+  document.getElementById('arr-' + col).classList.add('active');
+  document.getElementById('sortBy').value = col;
+  filterRules();
+}
+
+filterRules();
+
+// confidence vs lift grouped bar
+const top20 = RULES.slice(0, 20);
+new Chart(document.getElementById('confLiftChart'), {
+  type: 'bar',
+  data: {
+    labels: top20.map(r => r.antecedent.substring(0,8) + '→' + r.consequent.substring(0,8)),
+    datasets: [
+      { label: 'Confidence (%)', data: top20.map(r => +(r.confidence * 100).toFixed(1)),
+        backgroundColor: '#2a78d6', borderRadius: 3 },
+      { label: 'Lift × 10', data: top20.map(r => +(r.lift * 10).toFixed(1)),
+        backgroundColor: '#1baf7a', borderRadius: 3 }
+    ]
+  },
+  options: { ...chartDefaults,
+    scales: { y: { grid: { color: '#f0eeea' } }, x: { grid: { display: false }, ticks: { font: { size: 10 }, maxRotation: 50 } } },
+    plugins: { legend: { display: true, position: 'top',
+      labels: { usePointStyle: true, pointStyle: 'rect', font: { size: 12 } } } }
+  }
+});
+
+// ── Heatmap ──────────────────────────────────────────────────────────────────
+function heatColor(v, isDiag) {
+  if (isDiag) return { bg: '#f5f4f1', tc: '#aaa' };
+  if (v >= 8) return { bg: '#1e40af', tc: '#fff' };
+  if (v >= 5) return { bg: '#2a78d6', tc: '#fff' };
+  if (v >= 3) return { bg: '#93b8f5', tc: '#1e3a8a' };
+  return { bg: '#dbeafe', tc: '#1e3a8a' };
+}
+
+(function buildHeat() {
+  let html = '<table class="heat-table"><thead><tr><th></th>';
+  COOC_LABELS.forEach(l => html += `<th>${l}</th>`);
+  html += '</tr></thead><tbody>';
+  COOC_MATRIX.forEach((row, i) => {
+    html += `<tr><th class="row-label">${COOC_LABELS[i]}</th>`;
+    row.forEach((val, j) => {
+      const { bg, tc } = heatColor(val, i === j);
+      html += `<td style="background:${bg};color:${tc}">${i === j ? '—' : val + '%'}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('heat-container').innerHTML = html;
+})();
+
+// Scatter
+new Chart(document.getElementById('scatterChart'), {
+  type: 'bubble',
+  data: {
+    datasets: [{
+      label: 'Rule',
+      data: RULES.map(r => ({ x: +(r.support*100).toFixed(2), y: +(r.confidence*100).toFixed(1), r: Math.max(4, r.lift * 2.2) })),
+      backgroundColor: RULES.map(r => r.lift >= 6 ? 'rgba(237,161,0,0.7)' : r.lift >= 4 ? 'rgba(42,120,214,0.7)' : 'rgba(27,175,122,0.7)'),
+      borderColor: 'white', borderWidth: 1,
+    }]
+  },
+  options: { ...chartDefaults,
+    scales: {
+      x: { title: { display: true, text: 'Support (%)' }, grid: { color: '#f0eeea' }, min: 0 },
+      y: { title: { display: true, text: 'Confidence (%)' }, grid: { color: '#f0eeea' }, min: 30 }
+    },
+    plugins: { legend: { display: false }, tooltip: { callbacks: {
+      label: ctx => `Support: ${ctx.parsed.x}% · Conf: ${ctx.parsed.y}% · Lift: ${(ctx.parsed._custom.r/2.2).toFixed(2)}×`
+    }}}
+  }
+});
+
+// ── Products ─────────────────────────────────────────────────────────────────
+new Chart(document.getElementById('supportChart'), {
+  type: 'bar',
+  data: {
+    labels: STATS.map(s => s.product),
+    datasets: [{ label: 'Support (%)', data: STATS.map(s => +(s.support*100).toFixed(1)),
+      backgroundColor: '#2a78d6', borderRadius: 4 }]
+  },
+  options: { ...chartDefaults, indexAxis: 'y',
+    scales: { x: { grid: { color: '#f0eeea' }, ticks: { callback: v => v + '%' } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
+    plugins: { legend: { display: false } }
+  }
+});
+
+new Chart(document.getElementById('revenueChart'), {
+  type: 'bar',
+  data: {
+    labels: STATS.map(s => s.product),
+    datasets: [{ label: 'Revenue (₹)', data: STATS.map(s => s.revenue),
+      backgroundColor: '#1baf7a', borderRadius: 4 }]
+  },
+  options: { ...chartDefaults, indexAxis: 'y',
+    scales: { x: { grid: { color: '#f0eeea' }, ticks: { callback: v => '₹' + v.toLocaleString('en-IN') } }, y: { grid: { display: false }, ticks: { font: { size: 11 } } } },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => '₹' + ctx.parsed.x.toLocaleString('en-IN') } } }
+  }
+});
+
+const statsTbody = document.getElementById('stats-tbody');
+statsTbody.innerHTML = STATS.map((s, i) => `
+  <tr>
+    <td><strong>${s.product}</strong></td>
+    <td>${s.txn_count}</td>
+    <td>${(s.support * 100).toFixed(1)}%</td>
+    <td>₹${s.revenue.toLocaleString('en-IN')}</td>
+  </tr>`).join('');
+
+// ── Recommendations ───────────────────────────────────────────────────────────
+const allProducts = [...new Set(RULES.flatMap(r => [r.antecedent, r.consequent]))].sort();
+const recoSel = document.getElementById('recoSelect');
+allProducts.forEach(p => {
+  const opt = document.createElement('option'); opt.value = p; opt.textContent = p;
+  recoSel.appendChild(opt);
+});
+
+function showRecos() {
+  const product = recoSel.value;
+  const related = RULES.filter(r => r.antecedent === product)
+    .sort((a, b) => b.confidence - a.confidence);
+  const also = RULES.filter(r => r.consequent === product)
+    .sort((a, b) => b.confidence - a.confidence);
+
+  const maxConf = Math.max(...related.map(r => r.confidence), 0.01);
+  document.getElementById('reco-output').innerHTML = `
+    <div class="reco-card">
+      <h4>Customers who buy <strong>${product}</strong> also buy…</h4>
+      ${related.length ? related.slice(0,6).map(r => `
+        <div class="reco-item">
+          <span>${r.consequent}</span>
+          <div class="reco-bar"><div class="reco-bar-fill" style="width:${(r.confidence/maxConf*100).toFixed(0)}%"></div></div>
+          <span class="reco-score">${(r.confidence*100).toFixed(0)}%</span>
+        </div>`).join('') : '<p style="font-size:12px;color:var(--muted)">No rules found.</p>'}
+    </div>
+    <div class="reco-card">
+      <h4>Products that bring customers to <strong>${product}</strong></h4>
+      ${also.length ? also.slice(0,6).map(r => `
+        <div class="reco-item">
+          <span>${r.antecedent}</span>
+          <div class="reco-bar"><div class="reco-bar-fill" style="background:var(--teal);width:${(r.confidence/maxConf*100).toFixed(0)}%"></div></div>
+          <span class="reco-score" style="color:var(--teal)">${(r.confidence*100).toFixed(0)}%</span>
+        </div>`).join('') : '<p style="font-size:12px;color:var(--muted)">No rules found.</p>'}
+    </div>`;
+
+  const allRelated = [...related, ...also];
+  document.getElementById('reco-rules-tbody').innerHTML = allRelated.length
+    ? allRelated.map(r => `<tr>
+        <td><span class="badge badge-blue">${r.antecedent}</span></td>
+        <td><span class="badge badge-green">${r.consequent}</span></td>
+        <td>${(r.support*100).toFixed(1)}%</td>
+        <td>${(r.confidence*100).toFixed(1)}%</td>
+        <td><span class="badge ${liftBadgeClass(r.lift)}">${r.lift.toFixed(2)}×</span></td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" style="color:var(--muted);font-size:12px;padding:1rem">No rules for this product.</td></tr>';
+}
+showRecos();
+
+// ── Segments ─────────────────────────────────────────────────────────────────
+const SEGMENTS = [
+  { icon:'🥦', bg:'#d1fae5', name:'Health-conscious', desc:'Yogurt · Granola · Honey · Tea · Berries', pct:28 },
+  { icon:'🍝', bg:'#ede9fe', name:'Home cooks', desc:'Pasta · Tomato Sauce · Garlic · Olive Oil', pct:24 },
+  { icon:'🍺', bg:'#fef3c7', name:'Weekend entertainers', desc:'Beer · Wine · Chips · Cheese · Pretzels', pct:19 },
+  { icon:'🥚', bg:'#fee2e2', name:'Breakfast buyers', desc:'Eggs · Bacon · Bread · Butter · Coffee', pct:17 },
+  { icon:'🛒', bg:'#dbeafe', name:'Stock-up shoppers', desc:'Bulk staples · Large packs · Household', pct:12 },
+];
+document.getElementById('seg-list').innerHTML = SEGMENTS.map(s => `
+  <div class="seg-row">
+    <div class="seg-icon" style="background:${s.bg}">${s.icon}</div>
+    <div class="seg-info">
+      <div class="seg-name">${s.name}</div>
+      <div class="seg-desc">${s.desc}</div>
+    </div>
+    <div class="seg-right">
+      <div class="seg-pct">${s.pct}%</div>
+      <div class="seg-lbl">of baskets</div>
+    </div>
+  </div>`).join('');
+
+new Chart(document.getElementById('segPieChart'), {
+  type: 'doughnut',
+  data: {
+    labels: SEGMENTS.map(s => s.name),
+    datasets: [{ data: SEGMENTS.map(s => s.pct),
+      backgroundColor: ['#1baf7a','#7F77DD','#eda100','#e24b4a','#2a78d6'],
+      borderWidth: 3, borderColor: '#ffffff' }]
+  },
+  options: { responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 12 }, padding: 14 } } }
+  }
+});
+
+const PLACEMENTS = [
+  { from:'Cheese', to:'Wine', lift:'7.79×', reason:'88% confidence — highest co-purchase rate; co-locate in deli + wine aisle' },
+  { from:'Chicken', to:'Garlic', lift:'7.99×', reason:'Place fresh garlic adjacent to the poultry counter' },
+  { from:'Tea', to:'Honey', lift:'7.42×', reason:"Create a 'morning ritual' end-cap featuring both products" },
+  { from:'Beer', to:'Chips + Pretzels', lift:'3.6×', reason:'Weekend snack cluster — co-merchandise in beverages aisle' },
+  { from:'Pasta', to:'Olive Oil', lift:'2.84×', reason:'Cross-merchandise canned goods with oils on same shelf bay' },
+  { from:'Coffee', to:'Milk', lift:'2.46×', reason:'Feature milk cooler in the coffee / beverage aisle' },
+];
+document.getElementById('placement-tbody').innerHTML = PLACEMENTS.map((p, i) => `
+  <tr>
+    <td><span class="badge badge-blue">${p.from}</span></td>
+    <td><span class="badge badge-green">${p.to}</span></td>
+    <td><span class="badge ${i < 2 ? 'badge-amber' : i < 4 ? 'badge-blue' : 'badge-green'}">${p.lift}</span></td>
+    <td style="font-size:12px;color:var(--muted)">${p.reason}</td>
+  </tr>`).join('');
+</script>
+</body>
+</html>

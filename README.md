@@ -1,4 +1,3 @@
-# Market_basket_analysis
 # Market Basket Analysis
 
 A complete Python pipeline for **Market Basket Analysis (MBA)** using a custom Apriori algorithm implementation. Generates synthetic retail transaction data, mines association rules, produces an 8-panel visualisation dashboard, and exports results to CSV and a Word report.
